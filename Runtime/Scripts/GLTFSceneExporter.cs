@@ -798,7 +798,7 @@ namespace UnityGLTF
 		/// </summary>
 		/// <param name="path">File path for saving the GLTF and binary files</param>
 		/// <param name="fileName">The name of the GLTF file</param>
-		public void SaveGLTFandBin(string path, string fileName, bool exportTextures = true)
+		public void SaveGLTFandBin(string path, string fileName, bool exportTextures = true, bool asMeshColliders = false)
 		{
 			exportGltfMarker.Begin();
 
@@ -827,7 +827,7 @@ namespace UnityGLTF
 			beforeSceneExportMarker.End();
 
 			if (_rootTransforms != null)
-				_root.Scene = ExportScene(fileName, _rootTransforms);
+				_root.Scene = ExportScene(fileName, _rootTransforms, asMeshColliders);
 
 			if (ExportAnimations)
 				ExportAnimation();
@@ -972,7 +972,7 @@ namespace UnityGLTF
 			return true;
 		}
 
-		private SceneId ExportScene(string name, Transform[] rootObjTransforms)
+		private SceneId ExportScene(string name, Transform[] rootObjTransforms, bool asMeshColliders = false)
 		{
 			exportSceneMarker.Begin();
 
@@ -999,7 +999,7 @@ namespace UnityGLTF
 			scene.Nodes = new List<NodeId>(rootObjTransforms.Length);
 			foreach (var transform in rootObjTransforms)
 			{
-				scene.Nodes.Add(ExportNode(transform));
+				scene.Nodes.Add(ExportNode(transform, asMeshColliders));
 			}
 
 			_root.Scenes.Add(scene);
@@ -1013,7 +1013,7 @@ namespace UnityGLTF
 			};
 		}
 
-		private NodeId ExportNode(Transform nodeTransform)
+		private NodeId ExportNode(Transform nodeTransform, bool asMeshcollider = false)
 		{
 			if (_exportedTransforms.TryGetValue(nodeTransform.GetInstanceID(), out var existingNodeId))
 				return new NodeId() { Id = existingNodeId, Root = _root };
@@ -1083,10 +1083,10 @@ namespace UnityGLTF
 			_root.Nodes.Add(node);
 
 			// children that are primitives get put in a mesh
-			FilterPrimitives(nodeTransform, out GameObject[] primitives, out GameObject[] nonPrimitives);
+			FilterPrimitives(nodeTransform, out GameObject[] primitives, out GameObject[] nonPrimitives, asMeshcollider);
 			if (primitives.Length > 0)
 			{
-				var uniquePrimitives = GetUniquePrimitivesFromGameObjects(primitives);
+				var uniquePrimitives = GetUniquePrimitivesFromGameObjects(primitives, asMeshcollider);
 				if (uniquePrimitives != null)
 				{
 					node.Mesh = ExportMesh(nodeTransform.name, uniquePrimitives);
@@ -1159,7 +1159,7 @@ namespace UnityGLTF
 			return (meshFilter && meshRenderer && (meshRenderer.enabled || exportDisabledGameObjects)) || (skinnedMeshRender && (skinnedMeshRender.enabled || exportDisabledGameObjects)) && anyMaterialIsNonNull;
 		}
 
-        private void FilterPrimitives(Transform transform, out GameObject[] primitives, out GameObject[] nonPrimitives)
+        private void FilterPrimitives(Transform transform, out GameObject[] primitives, out GameObject[] nonPrimitives, bool allowMeshColliders = false)
 		{
 			var childCount = transform.childCount;
 			var prims = new List<GameObject>(childCount + 1);
@@ -1168,7 +1168,7 @@ namespace UnityGLTF
 			// add another primitive if the root object also has a mesh
 			if (ShouldExportTransform(transform))
 			{
-				if (ContainsValidRenderer(transform.gameObject, settings.ExportDisabledGameObjects))
+				if ((ContainsValidRenderer(transform.gameObject, settings.ExportDisabledGameObjects)) ||(allowMeshColliders && transform.GetComponent<MeshCollider>() != null))
 				{
 					prims.Add(transform.gameObject);
 				}

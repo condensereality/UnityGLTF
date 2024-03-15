@@ -40,7 +40,7 @@ namespace UnityGLTF
 			}
 		}
 
-		private static List<UniquePrimitive> GetUniquePrimitivesFromGameObjects(IEnumerable<GameObject> primitives)
+		private static List<UniquePrimitive> GetUniquePrimitivesFromGameObjects(IEnumerable<GameObject> primitives, bool useMeshColliders = false)
 		{
 			var primKeys = new List<UniquePrimitive>();
 
@@ -59,6 +59,15 @@ namespace UnityGLTF
 					if (smr)
 					{
 						meshObj = smr.sharedMesh;
+					}
+				}
+
+				if (useMeshColliders)
+				{
+					var collider = prim.GetComponent<MeshCollider>();
+					if (collider)
+					{
+						meshObj = collider.sharedMesh;
 					}
 				}
 
@@ -117,7 +126,7 @@ namespace UnityGLTF
 					exportPrimitiveMarker.End();
 					return null;
 				}
-
+				
 				var renderer = prim.GetComponent<MeshRenderer>();
 				if (!renderer) smr = prim.GetComponent<SkinnedMeshRenderer>();
 

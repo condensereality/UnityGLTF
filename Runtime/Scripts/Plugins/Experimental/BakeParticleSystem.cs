@@ -26,8 +26,12 @@ namespace UnityGLTF.Plugins
             if (!particleSystem) return;
 
             // emit MeshFilter/MeshRenderer, and destroy them again after the scene has been exported
-            var mf = transform.gameObject.AddComponent<MeshFilter>();
-            var mr = transform.gameObject.AddComponent<MeshRenderer>();
+            var mf = transform.GetComponent<MeshFilter>() != null 
+                ? transform.GetComponent<MeshFilter>() 
+                : transform.gameObject.AddComponent<MeshFilter>();
+            var mr = transform.gameObject.GetComponent<MeshRenderer>() != null
+                ? transform.GetComponent<MeshRenderer>()
+                : transform.gameObject.AddComponent<MeshRenderer>();
             
             var m = new Mesh();
             var p = transform.GetComponent<ParticleSystemRenderer>();
@@ -36,7 +40,14 @@ namespace UnityGLTF.Plugins
             if (p.sortMode == ParticleSystemSortMode.None)
                 p.sortMode = ParticleSystemSortMode.Distance;
             
-            p.BakeMesh(m, Camera.main, true);
+            if (Camera.main == null)
+            {
+                var camera = new GameObject().AddComponent<Camera>();
+                p.BakeMesh(m, camera, true);
+                SafeDestroy(camera.gameObject);
+            }else
+                p.BakeMesh(m, Camera.main, true);
+
             mf.sharedMesh = m;
             mr.sharedMaterial = p.sharedMaterial;
             p.sortMode = previousSortMode;
