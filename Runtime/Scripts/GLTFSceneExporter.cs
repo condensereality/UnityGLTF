@@ -366,7 +366,10 @@ namespace UnityGLTF
 		private HashSet<string> _fileNames;
 		private List<UniqueTexture> _textures;
 		private Dictionary<int, int> _exportedMaterials;
-		private bool _shouldUseInternalBufferForImages;
+#if ANIMATION_SUPPORTED
+		private List<(Transform tr, AnimationClip clip)> _animationClips;
+#endif
+		private bool shouldUseInternalBuffer;
 		private Dictionary<int, int> _exportedTransforms;
 		private List<Transform> _animatedNodes;
 
@@ -672,14 +675,14 @@ namespace UnityGLTF
 			var dirName = Path.GetDirectoryName(fullPath);
 			if (dirName != null && !Directory.Exists(dirName))
 				Directory.CreateDirectory(dirName);
-			_shouldUseInternalBufferForImages = true;
+			shouldUseInternalBuffer = true;
 
 			using (FileStream glbFile = new FileStream(fullPath, FileMode.Create))
 			{
 				SaveGLBToStream(glbFile, fileName);
 			}
 
-			if (!_shouldUseInternalBufferForImages)
+			if (!shouldUseInternalBuffer)
 			{
 				ExportImages(path);
 				ExportFiles(path);
@@ -693,7 +696,7 @@ namespace UnityGLTF
 		/// <returns></returns>
 		public byte[] SaveGLBToByteArray(string sceneName)
 		{
-			_shouldUseInternalBufferForImages = true;
+			shouldUseInternalBuffer = true;
 			using (var stream = new MemoryStream())
 			{
 				SaveGLBToStream(stream, sceneName);
@@ -713,7 +716,7 @@ namespace UnityGLTF
 			exportGltfInitMarker.Begin();
 			Stream binStream = new MemoryStream();
 			Stream jsonStream = new MemoryStream();
-			_shouldUseInternalBufferForImages = true;
+			shouldUseInternalBuffer = true;
 
 			_bufferWriter = new BinaryWriterWithLessAllocations(binStream);
 
@@ -803,7 +806,7 @@ namespace UnityGLTF
 			exportGltfMarker.Begin();
 
 			exportGltfInitMarker.Begin();
-			_shouldUseInternalBufferForImages = false;
+			shouldUseInternalBuffer = false;
 			var toLower = fileName.ToLowerInvariant();
 			if (toLower.EndsWith(".gltf"))
 				fileName = fileName.Substring(0, fileName.Length - 5);
@@ -876,8 +879,9 @@ namespace UnityGLTF
 			gltfFile.Close();
 			binFile.Close();
 #endif
-			if (!anyDataInBinFile)
-				File.Delete(fullPath);
+			ExportImages(path);
+			ExportFiles(path);
+			gltfWriteOutMarker.End();
 
 			if (exportTextures)
 				ExportImages(path);
@@ -1206,7 +1210,7 @@ namespace UnityGLTF
 		// }
 
 		public ExportFileResult ExportFile(string fileName, string mimeType, Stream stream) {
-			if (_shouldUseInternalBufferForImages) {
+			if (shouldUseInternalBuffer) {
 				byte[] data = new byte[stream.Length];
 				stream.Read(data, 0, (int)stream.Length);
 				stream.Close();
