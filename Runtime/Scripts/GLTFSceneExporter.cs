@@ -366,7 +366,10 @@ namespace UnityGLTF
 		private HashSet<string> _fileNames;
 		private List<UniqueTexture> _textures;
 		private Dictionary<int, int> _exportedMaterials;
-		private bool _shouldUseInternalBufferForImages;
+#if ANIMATION_SUPPORTED
+		private List<(Transform tr, AnimationClip clip)> _animationClips;
+#endif
+		private bool shouldUseInternalBuffer;
 		private Dictionary<int, int> _exportedTransforms;
 		private List<Transform> _animatedNodes;
 
@@ -672,14 +675,14 @@ namespace UnityGLTF
 			var dirName = Path.GetDirectoryName(fullPath);
 			if (dirName != null && !Directory.Exists(dirName))
 				Directory.CreateDirectory(dirName);
-			_shouldUseInternalBufferForImages = true;
+			shouldUseInternalBuffer = true;
 
 			using (FileStream glbFile = new FileStream(fullPath, FileMode.Create))
 			{
 				SaveGLBToStream(glbFile, fileName);
 			}
 
-			if (!_shouldUseInternalBufferForImages)
+			if (!shouldUseInternalBuffer)
 			{
 				ExportImages(path);
 				ExportFiles(path);
@@ -693,7 +696,7 @@ namespace UnityGLTF
 		/// <returns></returns>
 		public byte[] SaveGLBToByteArray(string sceneName)
 		{
-			_shouldUseInternalBufferForImages = true;
+			shouldUseInternalBuffer = true;
 			using (var stream = new MemoryStream())
 			{
 				SaveGLBToStream(stream, sceneName);
@@ -713,7 +716,7 @@ namespace UnityGLTF
 			exportGltfInitMarker.Begin();
 			Stream binStream = new MemoryStream();
 			Stream jsonStream = new MemoryStream();
-			_shouldUseInternalBufferForImages = true;
+			shouldUseInternalBuffer = true;
 
 			_bufferWriter = new BinaryWriterWithLessAllocations(binStream);
 
@@ -798,12 +801,12 @@ namespace UnityGLTF
 		/// </summary>
 		/// <param name="path">File path for saving the GLTF and binary files</param>
 		/// <param name="fileName">The name of the GLTF file</param>
-		public void SaveGLTFandBin(string path, string fileName, bool exportTextures = true)
+		public void SaveGLTFandBin(string path, string fileName, bool exportTextures = true, bool asMeshColliders = false)
 		{
 			exportGltfMarker.Begin();
 
 			exportGltfInitMarker.Begin();
-			_shouldUseInternalBufferForImages = false;
+			shouldUseInternalBuffer = false;
 			var toLower = fileName.ToLowerInvariant();
 			if (toLower.EndsWith(".gltf"))
 				fileName = fileName.Substring(0, fileName.Length - 5);
@@ -827,7 +830,7 @@ namespace UnityGLTF
 			beforeSceneExportMarker.End();
 
 			if (_rootTransforms != null)
-				_root.Scene = ExportScene(fileName, _rootTransforms);
+				_root.Scene = ExportScene(fileName, _rootTransforms, asMeshColliders);
 
 			if (ExportAnimations)
 				ExportAnimation();
@@ -876,8 +879,9 @@ namespace UnityGLTF
 			gltfFile.Close();
 			binFile.Close();
 #endif
-			if (!anyDataInBinFile)
-				File.Delete(fullPath);
+			ExportImages(path);
+			ExportFiles(path);
+			gltfWriteOutMarker.End();
 
 			if (exportTextures)
 				ExportImages(path);
@@ -972,7 +976,7 @@ namespace UnityGLTF
 			return true;
 		}
 
-		private SceneId ExportScene(string name, Transform[] rootObjTransforms)
+		private SceneId ExportScene(string name, Transform[] rootObjTransforms, bool asMeshColliders = false)
 		{
 			exportSceneMarker.Begin();
 
@@ -999,7 +1003,7 @@ namespace UnityGLTF
 			scene.Nodes = new List<NodeId>(rootObjTransforms.Length);
 			foreach (var transform in rootObjTransforms)
 			{
-				scene.Nodes.Add(ExportNode(transform));
+				scene.Nodes.Add(ExportNode(transform, asMeshColliders));
 			}
 
 			_root.Scenes.Add(scene);
@@ -1013,7 +1017,7 @@ namespace UnityGLTF
 			};
 		}
 
-		private NodeId ExportNode(Transform nodeTransform)
+		private NodeId ExportNode(Transform nodeTransform, bool asMeshcollider = false)
 		{
 			if (_exportedTransforms.TryGetValue(nodeTransform.GetInstanceID(), out var existingNodeId))
 				return new NodeId() { Id = existingNodeId, Root = _root };
@@ -1083,10 +1087,10 @@ namespace UnityGLTF
 			_root.Nodes.Add(node);
 
 			// children that are primitives get put in a mesh
-			FilterPrimitives(nodeTransform, out GameObject[] primitives, out GameObject[] nonPrimitives);
+			FilterPrimitives(nodeTransform, out GameObject[] primitives, out GameObject[] nonPrimitives, asMeshcollider);
 			if (primitives.Length > 0)
 			{
-				var uniquePrimitives = GetUniquePrimitivesFromGameObjects(primitives);
+				var uniquePrimitives = GetUniquePrimitivesFromGameObjects(primitives, asMeshcollider);
 				if (uniquePrimitives != null)
 				{
 					node.Mesh = ExportMesh(nodeTransform.name, uniquePrimitives);
@@ -1159,7 +1163,7 @@ namespace UnityGLTF
 			return (meshFilter && meshRenderer && (meshRenderer.enabled || exportDisabledGameObjects)) || (skinnedMeshRender && (skinnedMeshRender.enabled || exportDisabledGameObjects)) && anyMaterialIsNonNull;
 		}
 
-        private void FilterPrimitives(Transform transform, out GameObject[] primitives, out GameObject[] nonPrimitives)
+        private void FilterPrimitives(Transform transform, out GameObject[] primitives, out GameObject[] nonPrimitives, bool allowMeshColliders = false)
 		{
 			var childCount = transform.childCount;
 			var prims = new List<GameObject>(childCount + 1);
@@ -1168,7 +1172,7 @@ namespace UnityGLTF
 			// add another primitive if the root object also has a mesh
 			if (ShouldExportTransform(transform))
 			{
-				if (ContainsValidRenderer(transform.gameObject, settings.ExportDisabledGameObjects))
+				if ((ContainsValidRenderer(transform.gameObject, settings.ExportDisabledGameObjects)) ||(allowMeshColliders && transform.GetComponent<MeshCollider>() != null))
 				{
 					prims.Add(transform.gameObject);
 				}
@@ -1206,7 +1210,7 @@ namespace UnityGLTF
 		// }
 
 		public ExportFileResult ExportFile(string fileName, string mimeType, Stream stream) {
-			if (_shouldUseInternalBufferForImages) {
+			if (shouldUseInternalBuffer) {
 				byte[] data = new byte[stream.Length];
 				stream.Read(data, 0, (int)stream.Length);
 				stream.Close();

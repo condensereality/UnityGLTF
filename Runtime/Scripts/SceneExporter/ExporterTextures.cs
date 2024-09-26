@@ -216,7 +216,7 @@ namespace UnityGLTF
 				texture.Name = textureObj.name;
 			}
 
-			if (_shouldUseInternalBufferForImages)
+			if (shouldUseInternalBuffer)
 		    {
 				texture.Source = ExportImageInternalBuffer(uniqueTexture, textureSlot);
 		    }
@@ -288,7 +288,8 @@ namespace UnityGLTF
 					break;
 			}
 
-			var canExportAsJpeg = !textureHasAlpha && settings.UseTextureFileTypeHeuristic;
+			var canExportAsJpeg =
+				!textureHasAlpha && settings.UseTextureFileTypeHeuristic && textureSlot != TextureMapType.Normal;
 			var desiredExtension = canExportAsJpeg ? ".jpg" : ".png";
 			if (textureSlot == TextureMapType.Custom_HDR)
 				desiredExtension = ".exr";
