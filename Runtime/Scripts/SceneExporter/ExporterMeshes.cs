@@ -297,6 +297,13 @@ namespace UnityGLTF
 			// walk submeshes and export the ones with non-null meshes
 			for (int id = 0; id < maxOfSubMeshesAndMaterials; id++)
 			{
+				//	catch divbyzero
+				if ( materialsObj.Length == 0 )
+				{
+					//throw new Exception($"No materials on a primitive({mesh.Name}) that has {maxOfSubMeshesAndMaterials} [sub]meshes");
+					UnityEngine.Debug.LogError($"No materials on a primitive({mesh.Name}) that has {maxOfSubMeshesAndMaterials} [sub]meshes");
+					continue;
+				}
 				var mat = materialsObj[id % materialsObj.Length];
 				var submesh = id % meshObj.subMeshCount;
 				
