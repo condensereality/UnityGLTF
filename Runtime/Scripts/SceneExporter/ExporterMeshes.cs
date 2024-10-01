@@ -17,7 +17,7 @@ namespace UnityGLTF
 	{
 		private struct MeshAccessors
 		{
-			public AccessorId aPosition, aNormal, aTangent, aTexcoord0, aTexcoord1, aColor0;
+			public AccessorId aPosition, aNormal, aTangent, aTexcoord0, aTexcoord1, aTexcoord2, aColor0;
 			public Dictionary<int, MeshPrimitive> subMeshPrimitives;
 		}
 
@@ -86,7 +86,7 @@ namespace UnityGLTF
 					var assetPath = AssetDatabase.GetAssetPath(meshObj);
 					if (assetPath?.Length > 30) assetPath = "..." + assetPath.Substring(assetPath.Length - 30);
 					var otherOption = Application.isPlaying ? "No, skip mesh" : "Cancel export";
-					if(EditorUtility.DisplayDialog("Exporting mesh but mesh is not readable",
+					if (EditorUtility.DisplayDialog("Exporting mesh but mesh is not readable",
 							$"The mesh {meshObj.name} is not readable. Do you want to change its import settings and make it readable now?\n\n" + assetPath,
 							"Make it readable", otherOption,
 							DialogOptOutDecisionType.ForThisSession, MakeMeshReadableDialogueDecisionKey))
@@ -126,11 +126,11 @@ namespace UnityGLTF
 					exportPrimitiveMarker.End();
 					return null;
 				}
-				
+
 				var renderer = prim.GetComponent<MeshRenderer>();
 				if (!renderer) smr = prim.GetComponent<SkinnedMeshRenderer>();
 
-				if(!renderer && !smr)
+				if (!renderer && !smr)
 				{
 					Debug.LogWarning("GameObject does have neither renderer nor SkinnedMeshRenderer! " + prim.name, prim);
 					exportPrimitiveMarker.End();
@@ -242,7 +242,7 @@ namespace UnityGLTF
 
 			var maxOfSubMeshesAndMaterials = Math.Max(meshObj.subMeshCount, materialsObj.Length);
 			var prims = new MeshPrimitive[maxOfSubMeshesAndMaterials];
-			
+
 			List<MeshPrimitive> nonEmptyPrims = null;
 			var vertices = meshObj.vertices;
 			if (vertices.Length < 1)
@@ -254,7 +254,7 @@ namespace UnityGLTF
 
 			if (!_meshToPrims.ContainsKey(meshObj))
 			{
-				AccessorId aPosition = null, aNormal = null, aTangent = null, aTexcoord0 = null, aTexcoord1 = null, aColor0 = null;
+				AccessorId aPosition = null, aNormal = null, aTangent = null, aTexcoord0 = null, aTexcoord1 = null, aTexcoord2 = null, aColor0 = null;
 
 				aPosition = ExportAccessor(SchemaExtensions.ConvertVector3CoordinateSpaceAndCopy(meshObj.vertices, SchemaExtensions.CoordinateSpaceConversionScale));
 
@@ -270,6 +270,9 @@ namespace UnityGLTF
 				if (meshObj.uv2.Length != 0)
 					aTexcoord1 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv2));
 
+				if (meshObj.uv3.Length != 0)
+					aTexcoord2 = ExportAccessor(SchemaExtensions.FlipTexCoordArrayVAndCopy(meshObj.uv3));
+
 				if (settings.ExportVertexColors && meshObj.colors.Length != 0)
 					aColor0 = ExportAccessor(QualitySettings.activeColorSpace == ColorSpace.Linear ? meshObj.colors : meshObj.colors.ToLinear(), true);
 
@@ -278,6 +281,7 @@ namespace UnityGLTF
 				if (aTangent != null) aTangent.Value.BufferView.Value.Target = BufferViewTarget.ArrayBuffer;
 				if (aTexcoord0 != null) aTexcoord0.Value.BufferView.Value.Target = BufferViewTarget.ArrayBuffer;
 				if (aTexcoord1 != null) aTexcoord1.Value.BufferView.Value.Target = BufferViewTarget.ArrayBuffer;
+				if (aTexcoord2 != null) aTexcoord2.Value.BufferView.Value.Target = BufferViewTarget.ArrayBuffer;
 				if (aColor0 != null) aColor0.Value.BufferView.Value.Target = BufferViewTarget.ArrayBuffer;
 
 				_meshToPrims.Add(meshObj, new MeshAccessors()
@@ -287,6 +291,7 @@ namespace UnityGLTF
 					aTangent = aTangent,
 					aTexcoord0 = aTexcoord0,
 					aTexcoord1 = aTexcoord1,
+					aTexcoord2 = aTexcoord2,
 					aColor0 = aColor0,
 					subMeshPrimitives = new Dictionary<int, MeshPrimitive>()
 				});
@@ -333,6 +338,8 @@ namespace UnityGLTF
 						primitive.Attributes.Add(SemanticProperties.TEXCOORD_0, accessors.aTexcoord0);
 					if (accessors.aTexcoord1 != null)
 						primitive.Attributes.Add(SemanticProperties.TEXCOORD_1, accessors.aTexcoord1);
+					if (accessors.aTexcoord2 != null)
+						primitive.Attributes.Add(SemanticProperties.TEXCOORD_2, accessors.aTexcoord2);
 					if (accessors.aColor0 != null)
 						primitive.Attributes.Add(SemanticProperties.COLOR_0, accessors.aColor0);
 
@@ -355,13 +362,13 @@ namespace UnityGLTF
             nonEmptyPrims = new List<MeshPrimitive>(prims.Length);
             for (var i = 0; i < prims.Length; i++)
             {
-	            var prim = prims[i];
-	            // remove any prims that have empty triangles
-	            if (EmptyPrimitive(prim)) continue;
-	            // invoke pre export event
-	            foreach (var plugin in _plugins)
-		            plugin?.AfterPrimitiveExport(this, meshObj, prim, i);
-	            nonEmptyPrims.Add(prim);
+                var prim = prims[i];
+                // remove any prims that have empty triangles
+                if (EmptyPrimitive(prim)) continue;
+                // invoke pre export event
+                foreach (var plugin in _plugins)
+                    plugin?.AfterPrimitiveExport(this, meshObj, prim, i);
+                nonEmptyPrims.Add(prim);
             }
             prims = nonEmptyPrims.ToArray();
 

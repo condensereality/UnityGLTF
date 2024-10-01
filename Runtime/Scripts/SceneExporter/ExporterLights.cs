@@ -16,6 +16,12 @@ namespace UnityGLTF
         {
             GLTFLight light = null;
 
+            if (unityLight.bakingOutput.isBaked)
+            {
+                // Remove baked lights
+                return null;
+            }
+
             if (unityLight.type == LightType.Spot)
             {
 	            // TODO URP/HDRP can distinguish here, no need to guess innerConeAngle there
@@ -23,7 +29,15 @@ namespace UnityGLTF
                 light.Name = unityLight.name;
 
                 light.type = unityLight.type.ToString().ToLower();
-                light.color = unityLight.color.ToNumericsColorLinear();
+                if (unityLight.useColorTemperature)
+                {
+                    light.color = Mathf.CorrelatedColorTemperatureToRGB(unityLight.colorTemperature).ToNumericsColorLinear();
+                }
+                else
+                {
+                    light.color = unityLight.color.ToNumericsColorLinear();
+                }
+
                 light.range = unityLight.range;
                 light.intensity = GraphicsSettings.lightsUseLinearIntensity ? 
                     (unityLight.intensity * Mathf.PI) :
@@ -36,7 +50,14 @@ namespace UnityGLTF
                 light.Name = unityLight.name;
 
                 light.type = unityLight.type.ToString().ToLower();
-                light.color = unityLight.color.ToNumericsColorLinear();
+                if (unityLight.useColorTemperature)
+                {
+                    light.color = Mathf.CorrelatedColorTemperatureToRGB(unityLight.colorTemperature).ToNumericsColorLinear();
+                }
+                else
+                {
+                    light.color = unityLight.color.ToNumericsColorLinear();
+                }
                 light.intensity = unityLight.intensity * Mathf.PI;
                 if (!GraphicsSettings.lightsUseLinearIntensity)
                     light.intensity *= unityLight.intensity;
@@ -48,7 +69,14 @@ namespace UnityGLTF
                 light.Name = unityLight.name;
 
                 light.type = unityLight.type.ToString().ToLower();
-                light.color = unityLight.color.ToNumericsColorLinear();
+                if (unityLight.useColorTemperature)
+                {
+                    light.color = Mathf.CorrelatedColorTemperatureToRGB(unityLight.colorTemperature).ToNumericsColorLinear();
+                }
+                else
+                {
+                    light.color = unityLight.color.ToNumericsColorLinear();
+                }
                 light.range = unityLight.range;
                 light.intensity = unityLight.intensity * Mathf.PI;
                 if (!GraphicsSettings.lightsUseLinearIntensity)
